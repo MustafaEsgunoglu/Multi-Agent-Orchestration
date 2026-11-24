@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    @apply bg-[#0b0f19] text-slate-100 antialiased;
+  }
+}
+
+/* React Flow dark studio overrides */
+.react-flow__controls {
+  @apply border border-slate-800 bg-slate-900/95 shadow-lg rounded-lg overflow-hidden;
+}
+
+.react-flow__controls-button {
+  @apply bg-slate-900 text-slate-200 border-b border-slate-800 hover:bg-slate-800;
+}
+
+.react-flow__minimap {
+  @apply border border-slate-800 bg-slate-900/95 rounded-lg overflow-hidden;
+}

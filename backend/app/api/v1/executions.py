@@ -6,14 +6,17 @@ import json
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from decimal import Decimal
-from uuid import UUID
+from typing import Any
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from langgraph.checkpoint.memory import MemorySaver
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.crypto import decrypt_secret
 from app.core.tenant import TenantContext, get_current_tenant_context
 from app.db.models import ApiKey, ExecutionRun, RunStep, Workflow
@@ -26,6 +29,7 @@ from app.schemas.execution import (
     ResumeRunRequest,
     RunStepResponse,
 )
+from app.schemas.workflow import WorkflowDefinition
 
 router = APIRouter(tags=["executions"])
 
@@ -248,9 +252,27 @@ async def resume_human_approval_run(
     if result.status == "completed":
         run.completed_at = datetime.now(UTC)
 
+    persisted_steps: list[RunStep] = []
+    for metric in result.step_metrics:
+        step = RunStep(
+            tenant_id=ctx.tenant_id,
+            workspace_id=ctx.workspace_id,
+            run_id=run.id,
+            node_id=str(metric.get("node_id", "unknown")),
+            node_type=str(metric.get("node_type", "unknown")),
+            status=str(metric.get("status", "completed")),
+            prompt_tokens=int(metric.get("prompt_tokens", 0)),
+            completion_tokens=int(metric.get("completion_tokens", 0)),
+            estimated_cost_usd=Decimal(str(metric.get("estimated_cost_usd", 0.0))),
+            latency_ms=metric.get("latency_ms"),
+        )
+        db.add(step)
+        persisted_steps.append(step)
+
     await db.flush()
     response = ExecutionRunResponse.model_validate(run)
     response.interrupt_payload = result.interrupt_payload
+    response.steps = [RunStepResponse.model_validate(s) for s in persisted_steps]
     return response
 
 
@@ -295,3 +317,82 @@ async def get_execution_run(
     response = ExecutionRunResponse.model_validate(run)
     response.steps = [RunStepResponse.model_validate(s) for s in steps.all()]
     return response
+
+
+class DevStreamRequest(BaseModel):
+    definition: WorkflowDefinition
+    input: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.post("/workflows/stream-dev")
+async def stream_workflow_dev(payload: DevStreamRequest) -> StreamingResponse:
+    """Local development-only live LangGraph SSE execution without PostgreSQL."""
+    settings = get_settings()
+    if settings.app_env != "development":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dev-only endpoint is disabled outside development.",
+        )
+
+    runtime = ExecutionRuntime(
+        tenant_id=uuid4(),
+        workspace_id=uuid4(),
+    )
+    compiled = compile_workflow(
+        payload.definition,
+        runtime,
+        checkpointer=_DEFAULT_CHECKPOINTER,
+    )
+    thread_id = str(uuid4())
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        async for evt in compiled.astream_events(payload.input, thread_id=thread_id):
+            yield _format_sse(evt["event"], evt["data"])
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+class DevResumeRequest(BaseModel):
+    definition: WorkflowDefinition
+    thread_id: str = Field(min_length=1, max_length=128)
+    action: str = "approve"
+    edited_output: str | None = None
+
+
+@router.post("/workflows/resume-dev")
+async def resume_workflow_dev(payload: DevResumeRequest) -> dict[str, Any]:
+    """Local development-only HITL resume for unsaved template runs."""
+    settings = get_settings()
+    if settings.app_env != "development":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dev-only endpoint is disabled outside development.",
+        )
+
+    runtime = ExecutionRuntime(tenant_id=uuid4(), workspace_id=uuid4())
+    compiled = compile_workflow(
+        payload.definition,
+        runtime,
+        checkpointer=_DEFAULT_CHECKPOINTER,
+    )
+    result = await compiled.aresume(
+        {"action": payload.action, "edited_output": payload.edited_output},
+        thread_id=payload.thread_id,
+    )
+    return {
+        "status": result.status,
+        "thread_id": result.thread_id,
+        "output": result.output,
+        "interrupt_payload": result.interrupt_payload,
+        "total_tokens": result.total_tokens,
+        "total_cost_usd": result.total_cost_usd,
+        "step_metrics": result.step_metrics,
+    }

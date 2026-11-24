@@ -14,6 +14,7 @@ interface ChatMessage {
 export function CopilotSidebar() {
   const { exportDefinition, loadDefinition } = useWorkflowStore();
   const [prompt, setPrompt] = useState("");
+  const [copilotModel, setCopilotModel] = useState("deepseek-chat");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -36,6 +37,8 @@ export function CopilotSidebar() {
       const current = exportDefinition();
       const res = await generateWorkflowWithCopilot({
         prompt: trimmed,
+        provider: "deepseek",
+        model: copilotModel,
         existing_workflow: current.ok ? current.definition : undefined,
       });
       loadDefinition(res.workflow);
@@ -62,11 +65,21 @@ export function CopilotSidebar() {
 
   return (
     <aside className="flex h-full w-80 flex-col border-r border-slate-800 bg-slate-950/95">
-      <div className="flex items-center gap-2 border-b border-slate-800 px-4 py-3">
-        <Sparkles className="h-4 w-4 text-amber-400" />
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-200">
-          AI Workflow Copilot
-        </h2>
+      <div className="flex items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-amber-400" />
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-200">
+            AI Copilot
+          </h2>
+        </div>
+        <select
+          value={copilotModel}
+          onChange={(e) => setCopilotModel(e.target.value)}
+          className="rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono text-[11px] text-slate-200 focus:border-sky-500 focus:outline-none"
+        >
+          <option value="deepseek-chat">deepseek-chat</option>
+          <option value="deepseek-reasoner">deepseek-reasoner</option>
+        </select>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto p-4 text-xs">

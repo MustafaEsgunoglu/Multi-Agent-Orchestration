@@ -56,16 +56,36 @@ _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
+def normalize_async_database_url(url: str) -> str:
+    """Ensure SQLAlchemy asyncpg driver prefix for standard PostgreSQL URIs (e.g. Supabase)."""
+    cleaned = url.strip()
+    if cleaned.startswith("postgres://"):
+        return "postgresql+asyncpg://" + cleaned[len("postgres://") :]
+    if cleaned.startswith("postgresql://") and "+asyncpg" not in cleaned:
+        return "postgresql+asyncpg://" + cleaned[len("postgresql://") :]
+    return cleaned
+
+
+def build_async_connect_args(url: str) -> dict[str, object]:
+    """Return asyncpg connect_args compatible with Supabase PgBouncer/pooler."""
+    lower = url.lower()
+    if "supabase.co" in lower or "supabase.com" in lower:
+        return {"statement_cache_size": 0, "ssl": "require"}
+    return {}
+
+
 def get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         settings = get_settings()
+        db_url = normalize_async_database_url(settings.database_url)
         _engine = create_async_engine(
-            settings.database_url,
+            db_url,
             echo=False,
             pool_pre_ping=True,
             pool_size=5,
             max_overflow=10,
+            connect_args=build_async_connect_args(db_url),
         )
     return _engine
 

@@ -44,6 +44,7 @@ def format_litellm_model(provider: str, model: str) -> str:
         "groq": "groq",
         "mistral": "mistral",
         "openrouter": "openrouter",
+        "deepseek": "deepseek",
     }.get(provider, provider)
     return f"{provider_prefix}/{model}"
 
@@ -71,8 +72,13 @@ class LiteLLMClient:
         }
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
-        if api_key:
-            kwargs["api_key"] = api_key
+        resolved_key = api_key
+        if not resolved_key and provider == "deepseek":
+            from app.core.config import get_settings
+
+            resolved_key = get_settings().deepseek_api_key
+        if resolved_key:
+            kwargs["api_key"] = resolved_key
 
         response = await litellm.acompletion(**kwargs)
 

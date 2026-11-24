@@ -12,6 +12,7 @@ export const ProviderSchema = z.enum([
   "groq",
   "mistral",
   "openrouter",
+  "deepseek",
   "custom",
 ]);
 

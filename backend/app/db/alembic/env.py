@@ -12,13 +12,14 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 import app.db.models  # noqa: F401 — ensure all models are registered on Base.metadata
 from app.core.config import get_settings
-from app.db.base import Base
+from app.db.base import Base, build_async_connect_args, normalize_async_database_url
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+_db_url = normalize_async_database_url(get_settings().database_url)
+config.set_main_option("sqlalchemy.url", _db_url)
 target_metadata = Base.metadata
 
 
@@ -45,6 +46,7 @@ async def run_async_migrations() -> None:
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=build_async_connect_args(_db_url),
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

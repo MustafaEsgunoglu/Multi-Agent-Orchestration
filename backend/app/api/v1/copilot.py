@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.crypto import decrypt_secret
 from app.core.tenant import TenantContext, get_current_tenant_context
 from app.db.models import ApiKey
@@ -22,8 +23,10 @@ router = APIRouter(prefix="/copilot", tags=["copilot"])
 
 class CopilotGenerateRequest(BaseModel):
     prompt: str = Field(min_length=5, max_length=4000)
-    provider: Literal["openai", "anthropic", "google", "groq", "mistral", "openrouter", "custom"] = "openai"
-    model: str = Field(default="gpt-4o-mini", min_length=1, max_length=120)
+    provider: Literal[
+        "openai", "anthropic", "google", "groq", "mistral", "openrouter", "deepseek", "custom"
+    ] = "deepseek"
+    model: str = Field(default="deepseek-chat", min_length=1, max_length=120)
     api_key_id: UUID | None = None
     existing_workflow: WorkflowDefinition | None = None
 
@@ -64,6 +67,39 @@ async def generate_workflow(
             existing_workflow=payload.existing_workflow,
         )
     except CopilotGenerationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    return CopilotGenerateResponse(
+        workflow=result.workflow,
+        explanation=result.explanation,
+        attempts=result.attempts,
+        total_tokens=result.total_tokens,
+        estimated_cost_usd=result.estimated_cost_usd,
+    )
+
+
+@router.post("/generate-dev", response_model=CopilotGenerateResponse)
+async def generate_workflow_dev(payload: CopilotGenerateRequest) -> CopilotGenerateResponse:
+    """Local development-only Copilot endpoint using configured env provider key."""
+    settings = get_settings()
+    if settings.app_env != "development":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dev-only endpoint is disabled outside development.",
+        )
+    api_key_plain = settings.deepseek_api_key if payload.provider == "deepseek" else None
+    try:
+        result = await generate_workflow_from_prompt(
+            payload.prompt,
+            provider=payload.provider,
+            model=payload.model,
+            api_key=api_key_plain,
+            existing_workflow=payload.existing_workflow,
+        )
+    except (CopilotGenerationError, Exception) as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),

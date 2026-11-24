@@ -33,8 +33,10 @@ class EndNodeData(BaseNodeData):
 
 
 class LLMConfigMixin(BaseModel):
-    provider: Literal["openai", "anthropic", "google", "groq", "mistral", "openrouter", "custom"] = "openai"
-    model: str = Field(default="gpt-4o-mini", min_length=1, max_length=120)
+    provider: Literal[
+        "openai", "anthropic", "google", "groq", "mistral", "openrouter", "deepseek", "custom"
+    ] = "deepseek"
+    model: str = Field(default="deepseek-chat", min_length=1, max_length=120)
     api_key_id: UUID | None = None
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=2048, ge=1, le=128000)
@@ -79,8 +81,10 @@ class RouterRoute(BaseModel):
 
 class RouterNodeData(BaseNodeData):
     mode: Literal["llm", "expression"] = "llm"
-    provider: Literal["openai", "anthropic", "google", "groq", "mistral", "openrouter", "custom"] = "openai"
-    model: str = Field(default="gpt-4o-mini", min_length=1, max_length=120)
+    provider: Literal[
+        "openai", "anthropic", "google", "groq", "mistral", "openrouter", "deepseek", "custom"
+    ] = "deepseek"
+    model: str = Field(default="deepseek-chat", min_length=1, max_length=120)
     api_key_id: UUID | None = None
     routes: list[RouterRoute] = Field(default_factory=list)
 

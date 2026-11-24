@@ -11,7 +11,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class ApiKeyCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    provider: Literal["openai", "anthropic", "google", "groq", "mistral", "openrouter", "custom"]
+    provider: Literal[
+        "openai", "anthropic", "google", "groq", "mistral", "openrouter", "deepseek", "custom"
+    ]
     api_key: str = Field(min_length=8, max_length=512)
 
 

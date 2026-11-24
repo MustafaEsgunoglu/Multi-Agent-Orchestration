@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     langfuse_secret_key: str | None = None
     langfuse_host: str = "https://cloud.langfuse.com"
 
+    # Optional provider fallback key for local development (never logged)
+    deepseek_api_key: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

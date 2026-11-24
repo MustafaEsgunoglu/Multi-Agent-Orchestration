@@ -58,8 +58,8 @@ export const STARTER_WORKFLOW: WorkflowDefinition = {
       position: { x: 320, y: 180 },
       data: {
         label: "Lead Supervisor",
-        provider: "openai",
-        model: "gpt-4o-mini",
+        provider: "deepseek",
+        model: "deepseek-chat",
         temperature: 0.2,
         system_prompt: "Route incoming requests to the best specialist agent.",
         routing_strategy: "llm_router",
@@ -72,10 +72,10 @@ export const STARTER_WORKFLOW: WorkflowDefinition = {
       position: { x: 620, y: 70 },
       data: {
         label: "RAG Researcher",
-        provider: "anthropic",
-        model: "claude-3-5-sonnet-20241022",
+        provider: "deepseek",
+        model: "deepseek-chat",
         temperature: 0.2,
-        system_prompt: "Answer questions strictly using pgvector knowledge base citations.",
+        system_prompt: "Answer questions clearly and concisely using available context.",
         tool_ids: [],
         mcp_server_ids: [],
         rag_enabled: true,
@@ -88,8 +88,8 @@ export const STARTER_WORKFLOW: WorkflowDefinition = {
       position: { x: 620, y: 290 },
       data: {
         label: "MCP Action Agent",
-        provider: "openai",
-        model: "gpt-4o-mini",
+        provider: "deepseek",
+        model: "deepseek-chat",
         temperature: 0.1,
         system_prompt: "Execute external MCP & OpenAPI tools safely.",
         tool_ids: [],
@@ -158,8 +158,8 @@ export const RESEARCH_PIPELINE_WORKFLOW: WorkflowDefinition = {
       position: { x: 660, y: 180 },
       data: {
         label: "Synthesis Agent",
-        provider: "anthropic",
-        model: "claude-3-5-sonnet-20241022",
+        provider: "deepseek",
+        model: "deepseek-chat",
         temperature: 0.1,
         system_prompt:
           "Synthesize retrieved document chunks into a concise JSON summary with citations.",
@@ -242,6 +242,7 @@ interface WorkflowStoreState {
   deleteNode: (nodeId: string) => void;
   updateNodeData: (nodeId: string, patch: Partial<StudioNodeData>) => void;
   loadTemplateById: (workflowId: string) => void;
+  loadSavedWorkflow: (record: { id: string; name: string; definition: WorkflowDefinition }) => void;
   loadDefinition: (def: WorkflowDefinition) => void;
   exportDefinition: () => { ok: true; definition: WorkflowDefinition } | { ok: false; error: string };
   setNodeStatus: (nodeId: string, status: NodeRunStatus) => void;
@@ -370,6 +371,24 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
       recursionLimit: tpl.definition.execution_config.recursion_limit,
       nodes: toReactFlowNodes(tpl.definition),
       edges: toReactFlowEdges(tpl.definition),
+      selectedNodeId: null,
+      nodeStatuses: {},
+      totalTokens: 0,
+      totalCostUsd: 0,
+      lastError: null,
+    });
+  },
+
+  loadSavedWorkflow: (record) => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(LAST_WORKFLOW_STORAGE_KEY, record.id);
+    }
+    set({
+      activeWorkflowId: record.id,
+      workflowName: record.name,
+      recursionLimit: record.definition.execution_config.recursion_limit,
+      nodes: toReactFlowNodes(record.definition),
+      edges: toReactFlowEdges(record.definition),
       selectedNodeId: null,
       nodeStatuses: {},
       totalTokens: 0,

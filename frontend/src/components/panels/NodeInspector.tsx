@@ -4,6 +4,42 @@ import { SlidersHorizontal, Trash2 } from "lucide-react";
 
 import { useWorkflowStore } from "@/stores/workflowStore";
 
+export const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
+  deepseek: [
+    { id: "deepseek-chat", label: "deepseek-chat (V3)" },
+    { id: "deepseek-reasoner", label: "deepseek-reasoner (R1)" },
+  ],
+  openai: [
+    { id: "gpt-4o-mini", label: "gpt-4o-mini" },
+    { id: "gpt-4o", label: "gpt-4o" },
+    { id: "o3-mini", label: "o3-mini" },
+    { id: "gpt-4.1-mini", label: "gpt-4.1-mini" },
+  ],
+  anthropic: [
+    { id: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
+    { id: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
+    { id: "claude-3-7-sonnet-20250219", label: "Claude 3.7 Sonnet" },
+  ],
+  google: [
+    { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+  ],
+  groq: [
+    { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
+    { id: "deepseek-r1-distill-llama-70b", label: "DeepSeek R1 Distill 70B" },
+  ],
+  mistral: [
+    { id: "mistral-large-latest", label: "Mistral Large" },
+    { id: "mistral-small-latest", label: "Mistral Small" },
+  ],
+  openrouter: [
+    { id: "deepseek/deepseek-chat", label: "DeepSeek Chat (OR)" },
+    { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet (OR)" },
+    { id: "openai/gpt-4o-mini", label: "GPT-4o Mini (OR)" },
+  ],
+};
+
 export function NodeInspector() {
   const {
     nodes,
@@ -15,6 +51,11 @@ export function NodeInspector() {
   } = useWorkflowStore();
 
   const selected = nodes.find((n) => n.id === selectedNodeId);
+  const currentProvider = String(selected?.data.provider || "deepseek");
+  const currentModel = String(selected?.data.model || "deepseek-chat");
+  const presetModels = PROVIDER_MODELS[currentProvider] ?? [];
+  const isCustomModel =
+    presetModels.length > 0 && !presetModels.some((m) => m.id === currentModel);
 
   return (
     <aside className="flex h-full w-80 flex-col border-l border-slate-800 bg-slate-950/95">
@@ -29,8 +70,8 @@ export function NodeInspector() {
         {!selected ? (
           <div className="space-y-4">
             <p className="text-slate-400">
-              Select any node on the canvas to configure its LLM provider, prompt, RAG, MCP tools,
-              or Human-in-the-Loop policy.
+              Select any node on the canvas to configure its LLM provider, model, prompt, RAG, MCP
+              tools, or Human-in-the-Loop policy.
             </p>
             <div>
               <label className="mb-1 block font-medium text-slate-300">
@@ -75,14 +116,22 @@ export function NodeInspector() {
               selected.type === "supervisor" ||
               selected.type === "router") && (
               <>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2.5">
                   <div>
                     <label className="mb-1 block font-medium text-slate-300">Provider</label>
                     <select
-                      value={String(selected.data.provider || "openai")}
-                      onChange={(e) => updateNodeData(selected.id, { provider: e.target.value })}
-                      className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-slate-100"
+                      value={currentProvider}
+                      onChange={(e) => {
+                        const nextProvider = e.target.value;
+                        const firstModel = PROVIDER_MODELS[nextProvider]?.[0]?.id ?? currentModel;
+                        updateNodeData(selected.id, {
+                          provider: nextProvider,
+                          model: firstModel,
+                        });
+                      }}
+                      className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-slate-100 focus:border-sky-500 focus:outline-none"
                     >
+                      <option value="deepseek">DeepSeek</option>
                       <option value="openai">OpenAI</option>
                       <option value="anthropic">Anthropic</option>
                       <option value="google">Google Gemini</option>
@@ -91,14 +140,37 @@ export function NodeInspector() {
                       <option value="openrouter">OpenRouter</option>
                     </select>
                   </div>
+
                   <div>
                     <label className="mb-1 block font-medium text-slate-300">Model</label>
-                    <input
-                      type="text"
-                      value={String(selected.data.model || "gpt-4o-mini")}
-                      onChange={(e) => updateNodeData(selected.id, { model: e.target.value })}
-                      className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 font-mono text-slate-100"
-                    />
+                    <select
+                      value={isCustomModel ? "__custom__" : currentModel}
+                      onChange={(e) => {
+                        if (e.target.value === "__custom__") {
+                          updateNodeData(selected.id, { model: "" });
+                        } else {
+                          updateNodeData(selected.id, { model: e.target.value });
+                        }
+                      }}
+                      className="w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 font-mono text-slate-100 focus:border-sky-500 focus:outline-none"
+                    >
+                      {presetModels.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                        </option>
+                      ))}
+                      <option value="__custom__">Custom model ID...</option>
+                    </select>
+
+                    {isCustomModel && (
+                      <input
+                        type="text"
+                        placeholder="e.g. deepseek-chat"
+                        value={currentModel}
+                        onChange={(e) => updateNodeData(selected.id, { model: e.target.value })}
+                        className="mt-2 w-full rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1.5 font-mono text-slate-100 focus:border-sky-500 focus:outline-none"
+                      />
+                    )}
                   </div>
                 </div>
 
